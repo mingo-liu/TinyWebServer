@@ -53,8 +53,8 @@ void addsig(int sig, void(handler)(int), bool restart = true)
     memset(&sa, '\0', sizeof(sa));
     sa.sa_handler = handler;
     if (restart)
-        sa.sa_flags |= SA_RESTART;
-    sigfillset(&sa.sa_mask);
+        sa.sa_flags |= SA_RESTART;      // 重新调用被该信号终止的系统调用
+    sigfillset(&sa.sa_mask);            // 在信号集sa.sas_mask中设置所有信号，即屏蔽所有信号
     assert(sigaction(sig, &sa, NULL) != -1);
 }
 
@@ -95,13 +95,13 @@ int main(int argc, char *argv[])
 
     if (argc <= 1)
     {
-        printf("usage: %s ip_address port_number\n", basename(argv[0]));
+        printf("usage: %s ip_address port_number\n", basename(argv[0])); 
         return 1;
     }
 
     int port = atoi(argv[1]);
 
-    addsig(SIGPIPE, SIG_IGN);
+    addsig(SIGPIPE, SIG_IGN);     // 忽略目标信号
 
     //创建数据库连接池
     connection_pool *connPool = connection_pool::GetInstance();
@@ -139,14 +139,14 @@ int main(int argc, char *argv[])
     address.sin_port = htons(port);
 
     int flag = 1;
-    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));    // 强制使用TIME_WAIT状态的连接占用的socket地址 
     ret = bind(listenfd, (struct sockaddr *)&address, sizeof(address));
     assert(ret >= 0);
     ret = listen(listenfd, 5);
     assert(ret >= 0);
 
+    epoll_event events[MAX_EVENT_NUMBER];     // epoll_wait将就绪事件从内核事件表copy到events中
     //创建内核事件表
-    epoll_event events[MAX_EVENT_NUMBER];
     epollfd = epoll_create(5);
     assert(epollfd != -1);
 
@@ -157,23 +157,23 @@ int main(int argc, char *argv[])
     ret = socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
     assert(ret != -1);
     setnonblocking(pipefd[1]);
-    addfd(epollfd, pipefd[0], false);
+    addfd(epollfd, pipefd[0], false);         // 监听管道读端(pipefd[0])文件描述符上的可读事件
 
-    addsig(SIGALRM, sig_handler, false);
+    addsig(SIGALRM, sig_handler, false);      // sig_handler：将信号值写入管道pipefd[1]
     addsig(SIGTERM, sig_handler, false);
     bool stop_server = false;
 
     client_data *users_timer = new client_data[MAX_FD];
 
     bool timeout = false;
-    alarm(TIMESLOT);
+    alarm(TIMESLOT);      // 每隔TIMESLOT秒就会触发一个SIGALRM信号
 
     while (!stop_server)
     {
-        int number = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
-        if (number < 0 && errno != EINTR)
+        int number = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);     // timeout == -1：epoll_wait永远阻塞，直到某个事件发生
+        if (number < 0 && errno != EINTR)     // EINTR：表示epoll_wait系统调用被信号中断
         {
-            LOG_ERROR("%s", "epoll failure");
+            LOG_ERROR("%s", "epoll failure");   // 将错误写到日志
             break;
         }
 
@@ -184,9 +184,9 @@ int main(int argc, char *argv[])
             //处理新到的客户连接
             if (sockfd == listenfd)
             {
-                struct sockaddr_in client_address;
+                struct sockaddr_in client_address;    // client_address: 记录客户端的地址信息(IP地址，端口号)
                 socklen_t client_addrlength = sizeof(client_address);
-#ifdef listenfdLT
+#ifdef listenfdLT    // Level Trigger, 水平触发, 事件发生并通知应用程序后，应用程序可以不立即处理该事件 
                 int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_addrlength);
                 if (connfd < 0)
                 {
@@ -205,16 +205,16 @@ int main(int argc, char *argv[])
                 //创建定时器，设置回调函数和超时时间，绑定用户数据，将定时器添加到链表中
                 users_timer[connfd].address = client_address;
                 users_timer[connfd].sockfd = connfd;
-                util_timer *timer = new util_timer;
+                util_timer *timer = new util_timer;       // 计时器，用于处理非活动连接
                 timer->user_data = &users_timer[connfd];
                 timer->cb_func = cb_func;
-                time_t cur = time(NULL);
+                time_t cur = time(NULL);          // 获取当前的时间
                 timer->expire = cur + 3 * TIMESLOT;
                 users_timer[connfd].timer = timer;
                 timer_lst.add_timer(timer);
 #endif
 
-#ifdef listenfdET
+#ifdef listenfdET     // Edge Trigger, 边沿触发, 事件发生并通知应用程序后，应用程序必须立即处理该事件
                 while (1)
                 {
                     int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_addrlength);
@@ -259,12 +259,12 @@ int main(int argc, char *argv[])
                 }
             }
 
-            //处理信号
-            else if ((sockfd == pipefd[0]) && (events[i].events & EPOLLIN))
+            //处理信号, 统一信号源
+            else if ((sockfd == pipefd[0]) && (events[i].events & EPOLLIN))    // pipefd[0]是管道的读端
             {
                 int sig;
                 char signals[1024];
-                ret = recv(pipefd[0], signals, sizeof(signals), 0);
+                ret = recv(pipefd[0], signals, sizeof(signals), 0);       // 管道 pipefd 中可能包含多个信号值
                 if (ret == -1)
                 {
                     continue;
@@ -279,12 +279,12 @@ int main(int argc, char *argv[])
                     {
                         switch (signals[i])
                         {
-                        case SIGALRM:
+                        case SIGALRM:     // 定时器超时
                         {
                             timeout = true;
                             break;
                         }
-                        case SIGTERM:
+                        case SIGTERM:     // 终止进程，使用kill命令默认发送的信号就是SIGTERM
                         {
                             stop_server = true;
                         }
@@ -294,14 +294,14 @@ int main(int argc, char *argv[])
             }
 
             //处理客户连接上接收到的数据
-            else if (events[i].events & EPOLLIN)
+            else if (events[i].events & EPOLLIN)    // 连接 socket 上的数据可读
             {
                 util_timer *timer = users_timer[sockfd].timer;
                 if (users[sockfd].read_once())
                 {
                     LOG_INFO("deal with the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
                     Log::get_instance()->flush();
-                    //若监测到读事件，将该事件放入请求队列
+                    //若监测到读事件，将该事件放入线程池的请求队列
                     pool->append(users + sockfd);
 
                     //若有数据传输，则将定时器往后延迟3个单位
