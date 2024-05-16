@@ -89,12 +89,12 @@ void addfd(int epollfd, int fd, bool one_shot)
 #endif
 
     if (one_shot)
-        event.events |= EPOLLONESHOT;
+        event.events |= EPOLLONESHOT;   // 每次事件到来后都需要重新设置epoll监听事件
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
     setnonblocking(fd);
 }
 
-//从内核时间表删除描述符
+//从内核事件表删除描述符
 void removefd(int epollfd, int fd)
 {
     epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, 0);
@@ -135,8 +135,8 @@ void http_conn::close_conn(bool real_close)
 //初始化连接,外部调用初始化套接字地址
 void http_conn::init(int sockfd, const sockaddr_in &addr)
 {
-    m_sockfd = sockfd;
-    m_address = addr;
+    m_sockfd = sockfd;    // 连接socket
+    m_address = addr;     // 客户端socket的地址
     //int reuse=1;
     //setsockopt(m_sockfd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse));
     addfd(m_epollfd, sockfd, true);

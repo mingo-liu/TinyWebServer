@@ -28,7 +28,7 @@
 
 //这三个函数在http_conn.cpp中定义，改变链接属性
 extern int addfd(int epollfd, int fd, bool one_shot);
-extern int remove(int epollfd, int fd);
+extern int remove(int epollfd, int fd);     // 并没有用到remove, http_conn.cpp 中并未定义
 extern int setnonblocking(int fd);
 
 //设置定时器相关参数
@@ -61,7 +61,7 @@ void addsig(int sig, void(handler)(int), bool restart = true)
 //定时处理任务，重新定时以不断触发SIGALRM信号
 void timer_handler()
 {
-    timer_lst.tick();
+    timer_lst.tick();   // 处理链表上到期的任务，对于到期的任务调用定时器回调函数cb_func
     alarm(TIMESLOT);
 }
 
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    http_conn *users = new http_conn[MAX_FD];
+    http_conn *users = new http_conn[MAX_FD];   // 调用默认构造函数
     assert(users);
 
     //初始化数据库读取表
@@ -297,7 +297,7 @@ int main(int argc, char *argv[])
             else if (events[i].events & EPOLLIN)    // 连接 socket 上的数据可读
             {
                 util_timer *timer = users_timer[sockfd].timer;
-                if (users[sockfd].read_once())
+                if (users[sockfd].read_once())    // 从sockfd中读取客户端发送的数据 
                 {
                     LOG_INFO("deal with the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
                     Log::get_instance()->flush();
@@ -315,16 +315,16 @@ int main(int argc, char *argv[])
                         timer_lst.adjust_timer(timer);
                     }
                 }
-                else
+                else    // 缓冲区满，或者读取数据失败
                 {
-                    timer->cb_func(&users_timer[sockfd]);
+                    timer->cb_func(&users_timer[sockfd]);   // 从内核事件表中删除sockfd，并close sockfd
                     if (timer)
                     {
                         timer_lst.del_timer(timer);
                     }
                 }
             }
-            else if (events[i].events & EPOLLOUT)
+            else if (events[i].events & EPOLLOUT)         // 连接socket可写
             {
                 util_timer *timer = users_timer[sockfd].timer;
                 if (users[sockfd].write())
@@ -355,7 +355,7 @@ int main(int argc, char *argv[])
         }
         if (timeout)
         {
-            timer_handler();
+            timer_handler();    // 定时处理任务，重新定时以不断触发SIGALRM信号
             timeout = false;
         }
     }

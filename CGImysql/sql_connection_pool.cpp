@@ -35,22 +35,22 @@ void connection_pool::init(string url, string User, string PassWord, string DBNa
 	for (int i = 0; i < MaxConn; i++)
 	{
 		MYSQL *con = NULL;
-		con = mysql_init(con);
+		con = mysql_init(con);   // 初始化MySQL连接对象
 
 		if (con == NULL)
 		{
 			cout << "Error:" << mysql_error(con);
 			exit(1);
 		}
-		con = mysql_real_connect(con, url.c_str(), User.c_str(), PassWord.c_str(), DBName.c_str(), Port, NULL, 0);
+		con = mysql_real_connect(con, url.c_str(), User.c_str(), PassWord.c_str(), DBName.c_str(), Port, NULL, 0);  // 连接到执行服务器
 
 		if (con == NULL)
 		{
 			cout << "Error: " << mysql_error(con);
 			exit(1);
 		}
-		connList.push_back(con);
-		++FreeConn;
+		connList.push_back(con);      // 将新建的连接添加到连接池中
+		++FreeConn;       // FreeConn: 当前空闲的连接数
 	}
 
 	reserve = sem(FreeConn);
