@@ -87,7 +87,7 @@ private:
     HTTP_CODE parse_headers(char *text);        // 解析请求头
     HTTP_CODE parse_content(char *text);        // 解析请求体
     HTTP_CODE do_request();
-    char *get_line() { return m_read_buf + m_start_line; };   // 获取HTTP请求下一行的起始地址
+    char *get_line() { return m_read_buf + m_start_line; };   // 获取当前所解析行的起始地址
     LINE_STATUS parse_line();
     void unmap();
     bool add_response(const char *format, ...);
@@ -124,7 +124,7 @@ private:
     char *m_file_address;       // 客户请求的文件被mmap到内存中的起始位置
     struct stat m_file_stat;    // 请求文件的状态
     struct iovec m_iv[2];
-    int m_iv_count;
+    int m_iv_count;       // 表示被写内存块的数量
     int cgi;        //是否启用的POST
     char *m_string; //存储请求头数据
     int bytes_to_send;

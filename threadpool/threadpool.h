@@ -64,7 +64,7 @@ threadpool<T>::~threadpool()
 template <typename T>
 bool threadpool<T>::append(T *request)
 {
-    m_queuelocker.lock();
+    m_queuelocker.lock();   // 操作请求队列时加锁，因为请求队列被所有线程锁共享
     if (m_workqueue.size() > m_max_requests)
     {
         m_queuelocker.unlock();
@@ -85,11 +85,11 @@ void *threadpool<T>::worker(void *arg)
 template <typename T>
 void threadpool<T>::run()
 {
-    while (!m_stop)
+    while (!m_stop)           // 每一个线程都在不断地从请求队列中取出任务并执行
     {
-        m_queuestat.wait();
+        m_queuestat.wait();   // 使用信号量是为了避免线程在任务队列为空时忙等待，通过等待信号量的通知来判断是否有任务需要处理 
         m_queuelocker.lock();
-        if (m_workqueue.empty())
+        if (m_workqueue.empty())    // 前面使用了信号量，为什么还要判断队列为空?wait同时唤醒多个进程，队列中的任务可能被其他线程取走，当前进程取任务时，队列为空
         {
             m_queuelocker.unlock();
             continue;
@@ -102,7 +102,7 @@ void threadpool<T>::run()
 
         connectionRAII mysqlcon(&request->mysql, m_connPool);
         
-        request->process();
+        request->process();     // 在这里对应http_conn::process，用于处理客户端HTTP请求 
     }
 }
 #endif
